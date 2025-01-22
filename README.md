@@ -27,3 +27,5 @@ Controll Vanguard est une application simple et efficace pour gérer les service
    ```bash
    git clone https://github.com/Magodin/Vanguard-controll.git
    cd VanguardControll
+
+2. **Extraire et lancer le .exe**
