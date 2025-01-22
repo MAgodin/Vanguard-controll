@@ -1,6 +1,6 @@
 # Controll Vanguard
 
-Controll Vanguard est une application simple et efficace pour gérer les services **Vanguard** (utilisés par **VALORANT**) sur Windows. Elle vous permet de désactiver, activer et redémarrer les services Vanguard sans avoir à redémarrer votre ordinateur.
+Controll Vanguard est une application simple et efficace pour gérer les services **Vanguard** (utilisés par **VALORANT ET LOL**) sur Windows. Elle vous permet de désactiver, activer et redémarrer les services Vanguard sans avoir à redémarrer votre ordinateur.
 
 ## Fonctionnalités
 
@@ -25,5 +25,5 @@ Controll Vanguard est une application simple et efficace pour gérer les service
 1. **Télécharger le code** :
    - Clonez ce dépôt ou téléchargez le fichier ZIP.
    ```bash
-   git clone https://github.com/votre-utilisateur/controll-vanguard.git
-   cd controll-vanguard
+   git clone https://github.com/Magodin/Vanguard-controll.git
+   cd VanguardControll
