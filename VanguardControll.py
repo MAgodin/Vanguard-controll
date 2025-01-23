@@ -1,15 +1,15 @@
 import customtkinter as ctk
 import os
 from tkinter import messagebox
+from tkinter import PhotoImage
 import subprocess
 import ctypes
 import sys
 import time
 import threading
-import pystray
 from PIL import Image
 import json
-import shutil
+from infi.systray import SysTrayIcon
 
 # Vérifier les privilèges administratifs
 def is_admin():
@@ -22,6 +22,16 @@ if not is_admin():
     # Relancer le script avec des privilèges administratifs
     ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
     sys.exit()
+
+def resource_path(relative_path):
+    """Convertit un chemin relatif en chemin absolu pour les fichiers inclus avec PyInstaller."""
+    if hasattr(sys, '_MEIPASS'):
+        # Si l'application est exécutée en mode "frozen" (fichier exécutable)
+        base_path = sys._MEIPASS
+    else:
+        # Si l'application est exécutée en mode script
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 # Configuration de CustomTkinter
 ctk.set_appearance_mode("dark")  # Mode sombre
@@ -36,6 +46,8 @@ CONFIG_FILE = "config.json"
 
 # Chemin du dossier de démarrage
 STARTUP_FOLDER = os.path.join(os.getenv("APPDATA"), "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+
+systray_icon = None  # Variable pour stocker l'icône de la barre des tâches
 
 # Charger la configuration
 def load_config():
@@ -67,6 +79,8 @@ def manage_startup_shortcut(enable):
                 shortcut.WorkingDirectory = os.path.dirname(script_path)
                 shortcut.save()
                 print("Raccourci créé dans le dossier de démarrage.")
+            except ImportError:
+                messagebox.showerror("Erreur", "Les modules 'winshell' ou 'pywin32' ne sont pas installés.")
             except Exception as e:
                 print(f"Erreur lors de la création du raccourci : {e}")
     else:
@@ -81,48 +95,46 @@ def manage_startup_shortcut(enable):
 # Vérifier si un service est en cours d'exécution
 def is_service_running(service_name):
     try:
-        result = subprocess.run(f"sc query {service_name}", shell=True, capture_output=True, text=True)
+        result = subprocess.run(f"sc query {service_name}", shell=True, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
         return "RUNNING" in result.stdout
     except subprocess.CalledProcessError:
         return False
 
-# Vérifier si un processus est en cours d'exécution
 def is_process_running(process_name):
     try:
-        result = subprocess.run(f"tasklist /FI \"IMAGENAME eq {process_name}\"", shell=True, capture_output=True, text=True)
+        result = subprocess.run(f"tasklist /FI \"IMAGENAME eq {process_name}\"", shell=True, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
         return process_name in result.stdout
     except subprocess.CalledProcessError:
         return False
 
-# Simuler un redémarrage pour Vanguard
 def simulate_restart():
     try:
         # Arrêter les services Vanguard (s'ils sont en cours d'exécution)
         if is_service_running("vgc"):
-            subprocess.run("net stop vgc", shell=True, check=True)
+            subprocess.run("net stop vgc", shell=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
         else:
             print("Le service vgc n'est pas lancé. Ignorer l'arrêt.")
 
         if is_service_running("vgk"):
-            subprocess.run("net stop vgk", shell=True, check=True)
+            subprocess.run("net stop vgk", shell=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
         else:
             print("Le service vgk n'est pas lancé. Ignorer l'arrêt.")
 
         # Redémarrer les services Vanguard
         if not is_service_running("vgc"):
-            subprocess.run("net start vgc", shell=True, check=True)
+            subprocess.run("net start vgc", shell=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
         else:
             print("Le service vgc est déjà en cours d'exécution. Ignorer le démarrage.")
 
         if not is_service_running("vgk"):
-            subprocess.run("net start vgk", shell=True, check=True)
+            subprocess.run("net start vgk", shell=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
         else:
             print("Le service vgk est déjà en cours d'exécution. Ignorer le démarrage.")
 
         # Relancer vgtray.exe (si nécessaire)
         vgtray_path = r"C:\Program Files\Riot Vanguard\vgtray.exe"  # Chemin par défaut
         if os.path.exists(vgtray_path):
-            subprocess.Popen(vgtray_path, shell=True)
+            subprocess.Popen(vgtray_path, shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
 
         messagebox.showinfo("Succès", "Les services Vanguard ont été redémarrés avec succès.")
     except subprocess.CalledProcessError as e:
@@ -155,31 +167,46 @@ def monitor_riot_client(stop_event):
 
 # Fonction pour créer l'icône dans la zone de notification
 def create_systray_icon(window):
-    # Charger une image pour l'icône (remplacez par votre propre image si nécessaire)
-    image = Image.open("icon.png")  # Remplacez par le chemin de votre icône
+    # Charger votre image pour l'icône
+    image_path = resource_path("imgVanguardCross.png")
+    if not os.path.exists(image_path):
+        messagebox.showerror("Erreur", f"L'image {image_path} n'a pas été trouvée.")
+        return None
+
+    image = Image.open(image_path)
 
     # Créer un menu contextuel pour l'icône
-    menu = (
-        pystray.MenuItem("Ouvrir", lambda: window.deiconify()),
-        pystray.MenuItem("Quitter", lambda: (window.destroy(), icon.stop())),
+    menu_options = (
+        ("Ouvrir", None, lambda systray: window.deiconify()),
+        ("Quitter", None, lambda systray: (window.destroy(), systray.shutdown())),
     )
 
     # Créer l'icône dans la zone de notification
-    icon = pystray.Icon("Controll Vanguard", image, "Controll Vanguard", menu)
+    systray = SysTrayIcon(image, "Controll Vanguard", menu_options)
 
     # Masquer la fenêtre principale lors de la minimisation
-    def on_minimize(event):
+    def on_minimize(event=None):
         window.withdraw()
 
     window.bind("<Unmap>", on_minimize)
 
     # Démarrer l'icône
-    icon.run()
+    systray.start()
+    return systray
 
 # Interface principale
 def main():
     # Création de la fenêtre
     window = ctk.CTk()
+    # Charger l'image pour l'icône de la fenêtre principale
+    icon_path = resource_path("imgVanguardCross.png")  # Utiliser resource_path
+    if not os.path.exists(icon_path):
+        messagebox.showerror("Erreur", f"L'image {icon_path} n'a pas été trouvée.")
+        sys.exit()
+
+    # Définir l'icône de la fenêtre principale
+    icon_image = PhotoImage(file=icon_path)
+    window.iconphoto(True, icon_image)
     window.title("Controll Vanguard")
     window.geometry("400x450")
     window.resizable(False, False)
@@ -200,9 +227,10 @@ def main():
         save_config(config)
         manage_startup_shortcut(auto_mode_var.get())  # Gérer le raccourci au démarrage
 
+        global systray_icon
+    
         if auto_mode_var.get():
-            # Masquer la fenêtre et afficher l'icône dans la zone de notification
-            window.withdraw()
+            # Activer le mode automatique
             threading.Thread(target=create_systray_icon, args=(window,), daemon=True).start()
 
             # Vérifier si aucune application Riot n'est en cours d'exécution
@@ -211,12 +239,17 @@ def main():
 
             # Démarrer la surveillance du client Riot
             stop_event.clear()  # Réinitialiser l'événement d'arrêt
+            if not systray_icon:
+                systray_icon = create_systray_icon(window)
             threading.Thread(target=monitor_riot_client, args=(stop_event,), daemon=True).start()
 
             messagebox.showinfo("Mode automatique", "Le mode automatique est activé. L'application se lancera au démarrage et gérera Vanguard automatiquement.")
         else:
-            # Arrêter la surveillance du client Riot
-            stop_event.set()  # Définir l'événement d'arrêt
+            # Désactiver le mode automatique
+            stop_event.set()  # Signaler aux threads en cours de s'arrêter
+            if systray_icon:
+                systray_icon.shutdown()  # Arrêter l'icône de la zone de notification
+                systray_icon = None
             messagebox.showinfo("Mode automatique", "Le mode automatique est désactivé. L'application ne se lancera pas au démarrage.")
 
     switch_auto_mode = ctk.CTkSwitch(window, text="Mode automatique", variable=auto_mode_var, command=toggle_auto_mode)
@@ -235,6 +268,8 @@ def main():
         if auto_mode_var.get():
             window.withdraw()  # Minimiser dans la zone des icônes cachées
         else:
+            if systray_icon:
+                systray_icon.shutdown()  # Arrêter l'icône de la zone de notification
             window.destroy()  # Fermer l'application
 
     btn_quit = ctk.CTkButton(window, text="Quitter", command=quit_app, fg_color="#666666", hover_color="#444444", font=("Arial", 14))
@@ -243,8 +278,11 @@ def main():
     # Gérer la croix de fermeture
     def on_close():
         if auto_mode_var.get():
+            threading.Thread(target=create_systray_icon, args=(window,), daemon=True).start()
             window.withdraw()  # Minimiser dans la zone des icônes cachées
         else:
+            if systray_icon:
+                systray_icon.shutdown()  # Arrêter l'icône de la zone de notification
             window.destroy()  # Fermer l'application
 
     window.protocol("WM_DELETE_WINDOW", on_close)

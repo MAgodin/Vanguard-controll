@@ -5,7 +5,7 @@ a = Analysis(
     ['VanguardControll.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('imgVanguardCross.png', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
